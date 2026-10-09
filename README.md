@@ -1,6 +1,6 @@
 # Federico Feressin — Portfolio Web Full-Stack
 
-Portfolio personal de **Federico Feressin**, desarrollador web full-stack. Un sitio estático, rápido y responsive que reúne mi perfil profesional, mis habilidades técnicas y mis proyectos destacados, con un formulario de contacto funcional conectado a **EmailJS**.
+Portfolio personal de **Federico Feressin**, desarrollador web full-stack. Un sitio estático, rápido y responsive que reúne mi perfil profesional, mis habilidades técnicas y mis proyectos destacados, con un formulario de contacto funcional gestionado por **Formspree**.
 
 > Diseño limpio y minimalista, pensado para presentar mi trabajo y facilitar que clientes o reclutadores me contacten en pocos clics.
 
@@ -13,7 +13,7 @@ Portfolio personal de **Federico Feressin**, desarrollador web full-stack. Un si
 - [Stack tecnológico](#-stack-tecnológico)
 - [Estructura del proyecto](#-estructura-del-proyecto)
 - [Instalación y uso local](#-instalación-y-uso-local)
-- [Configuración del formulario (EmailJS)](#-configuración-del-formulario-emailjs)
+- [Configuración del formulario (Formspree)](#-configuración-del-formulario-formspree)
 - [Personalización](#-personalización)
 - [Despliegue](#-despliegue)
 - [Responsive y rendimiento](#-responsive-y-rendimiento)
@@ -37,7 +37,7 @@ Las secciones incluidas son:
 2. **Sobre mí:** descripción profesional, estadísticas y pilares de trabajo (código limpio, responsive, performance).
 3. **Habilidades:** barras animadas de progreso por área (Frontend, Backend, Herramientas).
 4. **Proyectos destacados:** grilla de proyectos con tecnologías y enlaces a demo/código.
-5. **Contacto:** formulario validado que envía correos vía EmailJS.
+5. **Contacto:** formulario validado que envía el mensaje vía Formspree.
 6. **Footer:** redes sociales y créditos.
 
 ---
@@ -49,11 +49,11 @@ Las secciones incluidas son:
 - **Menú responsive** con Bootstrap (colapsable en mobile).
 - **Animaciones al hacer scroll** con `IntersectionObserver` (aparición de secciones, tarjetas y features).
 - **Barras de habilidades animadas** que se completan al entrar en pantalla.
-- **Formulario de contacto funcional** con EmailJS:
+- **Formulario de contacto funcional** gestionado por Formspree:
   - Validación HTML5 + validaciones personalizadas (nombre, email válido, longitud del mensaje).
-  - Estado del botón "Enviando…" → "¡Mensaje enviado!".
-  - Alertas de éxito/error con auto-cierre.
-  - Diagnóstico en consola: avisa si falta configurar `config.js`.
+  - Envío por AJAX (`fetch`), sin recargar la página.
+  - Estado del botón "Enviando…" → "¡Mensaje enviado!" y alertas de éxito/error con auto-cierre.
+  - Protección antispam con honeypot (`_gotcha`) y filtrado del lado del servidor.
 - **Botón para volver arriba** que aparece tras hacer scroll.
 - **Botón para copiar el email** al portapapeles.
 - **Accesibilidad:** foco navegable en tarjetas, `aria-label` en íconos, enlace "saltar al contenido".
@@ -71,7 +71,7 @@ Las secciones incluidas son:
 | **Bootstrap Icons 1.13** (CDN) | Íconos de navegación |
 | **Font Awesome 6.4** (CDN) | Íconos de proyectos y contacto |
 | **Google Fonts** | Tipografías *Inter* y *Syne* |
-| **EmailJS Browser v3** | Envío del formulario de contacto sin backend |
+| **Formspree** | Backend del formulario de contacto (sin servidor propio) |
 | **IntersectionObserver API** | Animaciones y contador al hacer scroll |
 
 > No se utiliza ningún framework JS (React/Next). El objetivo es un sitio liviano y fácil de mantener.
@@ -85,15 +85,15 @@ PortFolio-master/
 ├── index.html            # Estructura y contenido del sitio
 ├── style.css             # Estilos personalizados
 ├── main.js               # Interactividad y lógica del formulario
-├── config.example.js     # Plantilla de configuración de EmailJS
-├── email-template.html    # Plantilla HTML del correo que recibe el formulario
-├── .gitignore            # Archivos que no se versionan (ej: config.js)
+├── .gitignore            # Archivos que no se versionan
+├── .github/
+│   └── workflows/        # Deploy automático a GitHub Pages
 ├── Resources/
 │   └── img/              # Imágenes de proyectos y perfil
 └── README.md
 ```
 
-> ⚠️ `config.js` **no se sube al repositorio** (contiene tus claves de EmailJS). Está incluido en `.gitignore`.
+> 📦 **Legado:** `config.example.js` y `email-template.html` pertenecen a la integración anterior con EmailJS. Ya no se usan y pueden eliminarse sin afectar el sitio.
 
 ---
 
@@ -108,17 +108,9 @@ git clone https://github.com/FedericoFeressin-Dev/PortFolio-master.git
 cd PortFolio-master
 ```
 
-### 2. Configurar EmailJS
+### 2. Configurar el formulario (Formspree)
 
-```bash
-# En Windows (PowerShell)
-Copy-Item config.example.js config.js
-
-# En macOS / Linux
-cp config.example.js config.js
-```
-
-Luego completá tus credenciales en `config.js` (ver sección siguiente).
+No hace falta crear ningún archivo de configuración: el endpoint vive en el atributo `action` del `<form>` en `index.html`. Seguí la [sección de Formspree](#-configuración-del-formulario-formspree) para obtener el tuyo y pegarlo.
 
 ### 3. Abrir el sitio
 
@@ -136,31 +128,45 @@ Y visitá `http://localhost:5500`.
 
 ---
 
-## 📧 Configuración del formulario (EmailJS)
+## 📧 Configuración del formulario (Formspree)
 
-El formulario usa **EmailJS**, que permite enviar correos desde el front-end sin necesidad de un backend.
+El formulario usa **[Formspree](https://formspree.io/)**, un servicio que actúa como backend del formulario: recibe el POST, valida los datos, filtra spam, guarda la submission y reenvía el mensaje por email. No requiere servidor propio ni claves expuestas en el cliente.
 
-### Paso a paso
+### ¿Qué es el endpoint?
 
-1. Creá una cuenta en [emailjs.com](https://www.emailjs.com/).
-2. En **Account → API Keys**, copiá tu **Public Key**.
-3. En **Email Services**, conectá tu correo (ej. Gmail) y copiá el **Service ID**.
-4. En **Email Templates**, creá una plantilla con estas variables y copiá el **Template ID**:
-   - `{{from_name}}`, `{{from_email}}`, `{{message}}`, `{{to_email}}`, `{{reply_to}}`, `{{timestamp}}`
-5. Completá `config.js`:
+Un **endpoint** es simplemente una URL a la que se le envían los datos. Formspree te da una con este formato:
 
-```js
-const EMAILJS_CONFIG = {
-    PUBLIC_KEY: 'TU_PUBLIC_KEY',
-    SERVICE_ID: 'service_XXXXXXX',
-    TEMPLATE_ID: 'template_XXXXXXX',
-    RECEIVER_EMAIL: 'tu-email@ejemplo.com'
-};
+```
+https://formspree.io/f/XXXXXXXX
 ```
 
-> 💡 Podés usar el archivo `email-template.html` de este repo como base para la plantilla de correo en EmailJS.
+Ese `XXXXXXXX` es tu **Form ID**. El endpoint es público por diseño (a diferencia de una API key, **no es un secreto**), por eso va directamente en el HTML.
 
-Si `config.js` no está configurado, el sitio muestra alertas y mensajes de diagnóstico en la consola (F12) para ayudarte a detectar qué falta.
+### Obtener tu endpoint
+
+1. Creá una cuenta en [formspree.io](https://formspree.io/) e ingresá.
+2. Andá a **+ Add New → New Form** y nombralo (ej. *Portfolio*).
+3. Copiá el endpoint generado (`https://formspree.io/f/XXXXXXXX`).
+4. Pegalo en el atributo `action` del formulario, en `index.html`:
+
+```html
+<form id="contactForm" action="https://formspree.io/f/XXXXXXXX" method="POST" novalidate>
+```
+
+> `main.js` lee el endpoint desde ese `action`, así que **es el único lugar donde hay que configurarlo**.
+
+### Cómo viajan los datos
+
+1. El usuario completa `name`, `email` y `message` (por eso los campos llevan atributo `name`).
+2. `main.js` hace un `POST` con `fetch` y el header `Accept: application/json`, que permite recibir la respuesta en JSON y **no recargar la página**.
+3. Formspree valida, filtra el spam y guarda la submission en tu panel.
+4. Te llega un email de notificación con el mensaje.
+
+### Extras incluidos
+
+- Un **honeypot** (`_gotcha`, campo oculto) que bloquea bots, y `_subject` para el asunto del correo.
+- Desde el panel de Formspree podés conectar **Slack, WhatsApp, Google Sheets** y más.
+- El plan gratuito incluye 50 envíos/mes, filtrado de spam y guardado de submissions por 30 días.
 
 ---
 
@@ -199,7 +205,7 @@ Al ser un sitio estático, se puede publicar gratis en varios servicios. La opci
 
 Alternativas: **Vercel**, **Netlify** o **Cloudflare Pages** (arrastrar la carpeta o conectar el repo).
 
-> Recordá que en producción `config.js` debe existir en el servidor (no se versiona), o configurar las claves por variables/entorno según el proveedor.
+> 🚀 El repo incluye un workflow en `.github/workflows/deploy-pages.yml` que despliega automáticamente a GitHub Pages en cada push a `main`. Como el endpoint de Formspree va en `index.html`, **no se necesitan secrets ni pasos extra**.
 
 ---
 

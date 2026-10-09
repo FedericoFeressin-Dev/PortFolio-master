@@ -1,55 +1,18 @@
 /* ============================
-   EMAILJS INITIALIZATION & DIAGNOSTICS
+   ARQUITECTURA DEL FORMULARIO (FORMSPREE)
+   ============================
+   El envío del formulario lo maneja Formspree, un "backend de formularios":
+   en lugar de mandar el correo desde el navegador con claves (como hacía
+   EmailJS), hacemos un POST a un único endpoint y Formspree se encarga de
+   validar, filtrar spam, guardar la submission y reenviarla por email.
+
+   El endpoint vive en el atributo `action` del <form> en index.html, así que
+   ése es el ÚNICO lugar donde hay que configurarlo. Más abajo, en el handler
+   de envío, lo leemos con `contactForm.getAttribute('action')`.
+
+   👉 Reemplazá el ID de ejemplo por el de tu formulario:
+      action="https://formspree.io/f/TU_FORM_ID"
    ============================ */
-(function () {
-    console.log('🔍 Iniciando diagnóstico de EmailJS...');
-
-    // Verificar si EmailJS está disponible
-    if (typeof emailjs === 'undefined') {
-        console.error('❌ EmailJS no está cargado. Verifica que el script esté en el HTML.');
-        return;
-    }
-
-    // Verificar configuración
-    if (typeof EMAILJS_CONFIG === 'undefined') {
-        console.error('❌ config.js no está cargado o EMAILJS_CONFIG no está definido.');
-        console.log('📝 Asegúrate de que config.js esté antes de main.js en el HTML.');
-        return;
-    }
-
-    const config = EMAILJS_CONFIG;
-
-    // Validar que todos los valores estén configurados (valores reales, no placeholders)
-    const missingConfig = [];
-    if (!config.PUBLIC_KEY || config.PUBLIC_KEY.includes('YOUR_') || config.PUBLIC_KEY.length < 10) {
-        missingConfig.push('PUBLIC_KEY');
-    }
-    if (!config.SERVICE_ID || config.SERVICE_ID.includes('XXXXX') || config.SERVICE_ID.length < 10) {
-        missingConfig.push('SERVICE_ID');
-    }
-    if (!config.TEMPLATE_ID || config.TEMPLATE_ID.includes('XXXXX') || config.TEMPLATE_ID.length < 10) {
-        missingConfig.push('TEMPLATE_ID');
-    }
-
-    if (missingConfig.length > 0) {
-        console.warn(`⚠️ Configuración incompleta en config.js. Falta: ${missingConfig.join(', ')}`);
-        console.log('📝 Actualiza estos valores en config.js con tus credenciales de EmailJS');
-        showDiagnosticAlert(missingConfig);
-        return;
-    }
-
-    // Inicializar EmailJS
-    try {
-        emailjs.init(config.PUBLIC_KEY);
-        console.log('✅ EmailJS inicializado correctamente');
-        console.log('📊 Configuración:');
-        console.log(`   - Service ID: ${config.SERVICE_ID.substring(0, 20)}...`);
-        console.log(`   - Template ID: ${config.TEMPLATE_ID.substring(0, 20)}...`);
-        console.log(`   - Receiver Email: ${config.RECEIVER_EMAIL}`);
-    } catch (error) {
-        console.error('❌ Error al inicializar EmailJS:', error);
-    }
-})();
 
 /* ============================
    DOM READY - MAIN INITIALIZATION
@@ -121,149 +84,90 @@ document.addEventListener('DOMContentLoaded', () => {
 
     revealItems.forEach(i => revealObserver.observe(i));
 
-    /* --------- CONTACT FORM - EMAILJS INTEGRATION --------- */
+    /* --------- CONTACT FORM - ENVÍO CON FORMSPREE --------- */
+    // Flujo: validar (HTML5 + reglas propias) → POST AJAX al endpoint → feedback visual.
     if (contactForm) {
+        // El endpoint se toma del atributo `action` del propio <form> (única fuente de verdad).
+        const formEndpoint = contactForm.getAttribute('action');
+
         contactForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            // Validación HTML5
+            // 1) Validación nativa de HTML5 (required, type="email", etc.)
             if (!contactForm.checkValidity()) {
                 e.stopPropagation();
                 contactForm.classList.add('was-validated');
                 return;
             }
 
-            // Verificar configuración de EmailJS
-            if (typeof EMAILJS_CONFIG === 'undefined') {
-                showAlert('error', '❌ Error: Configuración de EmailJS no encontrada. Verifica config.js');
-                console.error('EMAILJS_CONFIG no está definido');
-                return;
-            }
-
-            // Validar que los valores sean válidos (no placeholders)
-            const requiredFields = {
-                'PUBLIC_KEY': EMAILJS_CONFIG.PUBLIC_KEY,
-                'SERVICE_ID': EMAILJS_CONFIG.SERVICE_ID,
-                'TEMPLATE_ID': EMAILJS_CONFIG.TEMPLATE_ID
-            };
-
-            for (const [field, value] of Object.entries(requiredFields)) {
-                if (!value || value.includes('YOUR_') || value.includes('XXXXX')) {
-                    showAlert('error', `❌ Error: Debes configurar tu ${field} en config.js`);
-                    return;
-                }
-            }
-
-            const btn = contactForm.querySelector('button[type="submit"]');
-            const originalText = btn.innerHTML;
-            const originalClass = btn.className;
-
-            // Obtener datos del formulario
             const name = document.getElementById('name').value.trim();
             const email = document.getElementById('email').value.trim();
             const message = document.getElementById('message').value.trim();
 
-            // Validaciones adicionales
-            if (!name || !email || !message) {
-                showAlert('error', '✗ Por favor completa todos los campos.');
+            // 2) Reglas de negocio más estrictas que HTML5
+            if (name.length < 3) {
+                showAlert('error', '✗ El nombre debe tener al menos 3 caracteres.');
                 return;
             }
-
-            // Validar email (cualquier email válido, no necesariamente el tuyo)
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(email)) {
                 showAlert('error', '✗ Por favor ingresa un email válido (ej: pepe@gmail.com).');
                 return;
             }
-
-            // Validar que el nombre tenga al menos 3 caracteres
-            if (name.length < 3) {
-                showAlert('error', '✗ El nombre debe tener al menos 3 caracteres.');
-                return;
-            }
-
-            // Validar que el mensaje tenga al menos 10 caracteres
             if (message.length < 10) {
                 showAlert('error', '✗ El mensaje debe tener al menos 10 caracteres.');
                 return;
             }
 
-            // Cambiar estado del botón a "enviando"
+            // 3) Evitar enviar si el endpoint todavía no fue configurado
+            if (!formEndpoint || formEndpoint.includes('XXXXXXXX')) {
+                console.error('Configurá el atributo action del form en index.html con tu URL de Formspree.');
+                showAlert('error', '✗ Falta configurar el endpoint de Formspree (ver consola).');
+                return;
+            }
+
+            const btn = contactForm.querySelector('button[type="submit"]');
+            const originalText = btn.innerHTML;
+
+            // 4) Estado "enviando"
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Enviando...';
-
-            console.log('📨 Intentando enviar email...');
-            console.log('   Nombre:', name);
-            console.log('   De:', email);
-            console.log('   Mensaje:', message.substring(0, 50) + '...');
+            console.log('📨 Enviando formulario a Formspree...');
 
             try {
-                // Enviar email usando EmailJS
-                // El email se enviará A TU CORREO (RECEIVER_EMAIL) 
-                // pero el remitente será quien completó el formulario
-                const response = await emailjs.send(
-                    EMAILJS_CONFIG.SERVICE_ID,
-                    EMAILJS_CONFIG.TEMPLATE_ID,
-                    {
-                        from_name: name,           // Nombre del visitante
-                        from_email: email,         // Email del visitante (pepe@gmail.com, etc)
-                        message: message,          // Mensaje del visitante
-                        to_email: EMAILJS_CONFIG.RECEIVER_EMAIL,  // Tu email (fedeferessin2001@gmail.com)
-                        reply_to: email,            // Responder al email del visitante
-                        timestamp: new Date().toLocaleString() // <-- agrega esto si quieres fecha en el email
-                    }
-                );
+                // FormData recoge automáticamente todos los campos con atributo `name`.
+                // El header Accept: application/json le pide a Formspree una respuesta JSON
+                // en vez de redirigir a su "Thank You page".
+                const response = await fetch(formEndpoint, {
+                    method: 'POST',
+                    body: new FormData(contactForm),
+                    headers: { 'Accept': 'application/json' }
+                });
 
-                if (response.status === 200) {
-                    // Éxito
-                    console.log('✅ Email enviado exitosamente', response);
+                if (response.ok) {
+                    // 200/OK → éxito
+                    console.log('✅ Formulario enviado correctamente');
                     btn.innerHTML = '<i class="fa-solid fa-check me-2"></i>¡Mensaje enviado!';
                     btn.style.background = 'var(--color-success)';
                     btn.style.borderColor = 'var(--color-success)';
 
-                    // Limpiar formulario
                     contactForm.reset();
                     contactForm.classList.remove('was-validated');
-
-                    // Mostrar alerta de éxito
                     showAlert('success', '✅ ¡Mensaje enviado correctamente! Me pondré en contacto pronto.');
-
-                    // Reset del botón después de 4 segundos
-                    setTimeout(() => {
-                        btn.disabled = false;
-                        btn.innerHTML = originalText;
-                        btn.style.background = '';
-                        btn.style.borderColor = '';
-                    }, 4000);
+                } else {
+                    // Formspree devuelve los errores de validación en JSON (ej: un campo mal formado)
+                    const data = await response.json().catch(() => ({}));
+                    const detail = (data.errors || []).map(err => err.message).join(' ');
+                    throw new Error(detail || `Error ${response.status}`);
                 }
             } catch (error) {
-                console.error('❌ Error al enviar email:', error);
-                console.error('Error details:', {
-                    message: error.message,
-                    status: error.status,
-                    text: error.text
-                });
-
-                // Mostrar mensaje de error específico
-                let errorMsg = '✗ Error al enviar. Intenta nuevamente o usa: fedeferessin2001@gmail.com';
-
-                if (error.text && error.text.includes('AccessDenied')) {
-                    errorMsg = '✗ Error: SERVICE_ID o TEMPLATE_ID incorrectos. Verifica config.js';
-                } else if (error.text && error.text.includes('Bad Request')) {
-                    errorMsg = '✗ Error: Los datos no coinciden con tu plantilla. Verifica los campos en config.js';
-                } else if (error.status === 401) {
-                    errorMsg = '✗ Error de autenticación. Verifica tu PUBLIC_KEY en config.js';
-                } else if (error.status === 429) {
-                    errorMsg = '✗ Demasiadas solicitudes. Intenta en unos minutos.';
-                }
-
+                console.error('❌ Error al enviar el formulario:', error);
+                showAlert('error', '✗ No se pudo enviar. Intentá de nuevo o escribime a fedeferessin2001@gmail.com');
                 btn.innerHTML = '<i class="fa-solid fa-exclamation-triangle me-2"></i>Error al enviar';
                 btn.style.background = 'var(--color-danger)';
                 btn.style.borderColor = 'var(--color-danger)';
-
-                showAlert('error', errorMsg);
-
-                // Reset del botón después de 3 segundos
+            } finally {
+                // Restaurar el botón siempre (éxito o error) luego de un breve lapso
                 setTimeout(() => {
                     btn.disabled = false;
                     btn.innerHTML = originalText;
@@ -375,23 +279,6 @@ function showAlert(type, message) {
             alertDiv.remove();
         }
     }, 5000);
-}
-
-/* ============================
-   DIAGNOSTIC ALERT
-   ============================ */
-function showDiagnosticAlert(missingFields) {
-    const message = `
-        <strong>⚠️ EmailJS no está configurado correctamente</strong><br>
-        Faltan los siguientes campos en <code>config.js</code>:<br>
-        <ul style="text-align: left; margin: 0.5rem 0;">
-            ${missingFields.map(field => `<li><code>${field}</code></li>`).join('')}
-        </ul>
-        Abre la consola (F12) para más detalles.
-    `;
-    
-    console.log('%cEmailJS Configuration Required:', 'color: red; font-size: 16px; font-weight: bold;');
-    console.log('Missing fields:', missingFields);
 }
 
 /* ============================
