@@ -9,3 +9,6 @@ build/
 npm-debug.log
 yarn-error.log
 *.log
+
+# Guías internas del proyecto (no se publican)
+/Agents/
